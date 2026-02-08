@@ -34,11 +34,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
-COPY worker/ /app/
+COPY worker /app/worker
 
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import sys; sys.exit(0)"
 
-CMD ["python", "runner.py"]
+CMD ["python", "-m", "worker.runner"]

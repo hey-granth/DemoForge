@@ -30,7 +30,7 @@ npm install
 ### Full Stack (Recommended)
 ```bash
 # Start backend (API + Redis + Worker)
-docker-compose up -d
+docker compose up -d
 
 # Start frontend (Dev mode)
 cd frontend
@@ -40,13 +40,13 @@ npm run dev
 ### Resource Management
 ```bash
 # View backend logs
-docker-compose logs -f
+docker compose logs -f
 
 # Scale workers for faster processing
-docker-compose up -d --scale worker=3
+docker compose up -d --scale worker=3
 
 # Stop all backend services
-docker-compose down -v
+docker compose down -v
 ```
 
 ---
@@ -92,13 +92,13 @@ curl -X DELETE http://localhost:8000/demo/cleanup/{job_id}
 If videos are not generating:
 ```bash
 # Check worker logs for Playwright/FFmpeg errors
-docker-compose logs -f worker
+docker compose logs -f worker
 ```
 
 ### Redis Inspection
 ```bash
 # Enter Redis CLI inside the container
-docker-compose exec redis redis-cli
+docker compose exec redis redis-cli
 
 # Check queue length
 LLEN demo:queue
@@ -117,7 +117,7 @@ npm run build
 ---
 
 ## 5. Development Workflow
-1. Start Backend: `docker-compose up -d`
+1. Start Backend: `docker compose up -d`
 2. Start Frontend: `npm run dev` (in `frontend/`)
 3. Open: `http://localhost:3000`
-4. Monitor: `docker-compose logs -f worker`
+4. Monitor: `docker compose logs -f worker`

@@ -14,6 +14,10 @@ from .executor import ExecutionController
 from .recorder import VideoProcessor
 
 
+# Redis config with socket timeout
+REDIS_SOCKET_TIMEOUT = 5.0
+REDIS_SOCKET_CONNECT_TIMEOUT = 5.0
+
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "2"))
@@ -26,85 +30,104 @@ class DemoWorker:
     def __init__(self):
         self.redis_client: Optional[redis.Redis] = None
         self.running = True
-    
+
     async def start(self):
         self.redis_client = redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            decode_responses=False
+            host=REDIS_HOST, 
+            port=REDIS_PORT, 
+            decode_responses=False,
+            socket_timeout=REDIS_SOCKET_TIMEOUT,
+            socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
+            retry_on_timeout=True,
+            health_check_interval=30
         )
-        
-        print(f"Worker started. Polling queue every {POLL_INTERVAL}s")
-        
+
+        try:
+            await self.redis_client.ping()
+            print(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
+        except Exception as e:
+            print(f"Failed to connect to Redis: {e}")
+            raise e
+
+        print(f"Worker started. Polling queue every {POLL_INTERVAL}s", flush=True)
+
         while self.running:
             try:
-                result = await self.redis_client.brpop(["demo:queue"], timeout=POLL_INTERVAL)
-                
+                try:
+                    # Check connection before popping
+                    await self.redis_client.ping()
+                except redis.ConnectionError:
+                    print("Redis connection lost. Reconnecting...")
+                    await asyncio.sleep(1)
+                    continue
+
+                result = await self.redis_client.brpop(
+                    ["demo:queue"], timeout=POLL_INTERVAL
+                )
+
                 if result:
                     job_id_str = result[1].decode()
                     await self.process_job(job_id_str)
-            
+
             except KeyboardInterrupt:
                 self.running = False
             except Exception as e:
                 print(f"Worker error: {e}")
                 await asyncio.sleep(POLL_INTERVAL)
-        
+
         await self.redis_client.close()
-    
+
     async def process_job(self, job_id: str):
         if not self.redis_client:
             print(f"Redis client not available")
             return
-        
-        print(f"Processing job: {job_id}")
-        
+
+        print(f"Processing job: {job_id}", flush=True)
+
         try:
             await self._update_job_status(job_id, "processing")
-            
+
             job_data = await self.redis_client.get(f"job:{job_id}")
             if not job_data:
                 print(f"Job {job_id} not found")
                 return
-            
+
             data = json.loads(job_data)
             url = data["url"]
-            
+
             video_path = await self._run_demo(url, job_id)
-            
+
             with open(video_path, "rb") as f:
                 video_data = f.read()
-            
-            await self.redis_client.setex(
-                f"video:{job_id}",
-                3600,
-                video_data
-            )
-            
+
+            await self.redis_client.setex(f"video:{job_id}", 3600, video_data)
+
             video_path.unlink()
-            
+
             await self._update_job_status(job_id, "completed")
             print(f"Job {job_id} completed")
-        
+
         except Exception as e:
             print(f"Job {job_id} failed: {e}")
             await self._update_job_status(job_id, "failed", error=str(e))
-    
+
     async def _run_demo(self, url: str, job_id: str) -> Path:
+        # 1. Create unique temp directory
         temp_dir = Path(tempfile.mkdtemp())
-        video_dir = temp_dir / "recordings"
+        video_dir = temp_dir / "raw"
         video_dir.mkdir(exist_ok=True)
         
         browser = None
-        temp_video_path = None
         
         try:
+            # 2. Start recording
             browser = BrowserSession(video_dir=video_dir)
             await browser.start()
             
             if not browser.page:
                 raise RuntimeError("Browser page failed to initialize")
             
+            # 3. Execute interaction
             discovery = InteractionDiscovery(browser.page)
             planner = InteractionPlanner()
             executor = ExecutionController(
@@ -115,21 +138,33 @@ class DemoWorker:
             
             await executor.execute_demo(url, browser, discovery, planner)
             
+            # 4. Close browser context explicitly to flush video
             await browser.stop()
+            browser = None  # Prevent double close in finally
             
-            raw_video = await browser.get_video_path()
-            
-            if not raw_video or not raw_video.exists():
-                raise RuntimeError("Video recording not found")
-            
-            output_path = temp_dir / f"{job_id}.mp4"
-            
+            # 5. Discover recorded file
             processor = VideoProcessor()
+            raw_video = processor.discover_video_file(video_dir)
+            
+            # 6. Convert to MP4
+            output_path = temp_dir / f"{job_id}.mp4"
             final_video = processor.process_video(raw_video, output_path)
-            temp_video_path = raw_video
+            
+            # 7. Validate output
+            if not final_video.exists():
+                raise RuntimeError("Final MP4 file missing")
+            
+            if final_video.stat().st_size == 0:
+                raise RuntimeError("Generated video is empty")
             
             return final_video
-        
+
+        except Exception as e:
+            # If we fail during run_demo, we might need to cleanup temp_dir here
+            # But the finally block handles it.
+            # We just re-raise to let process_job handle the error reporting
+            raise e
+
         finally:
             if browser:
                 try:
@@ -137,38 +172,40 @@ class DemoWorker:
                 except:
                     pass
             
-            if temp_video_path and temp_video_path.exists():
-                try:
-                    temp_video_path.unlink()
-                except:
-                    pass
+            # 8. Cleanup (only remove temp dir, as final video is in it but read by caller)
+            # The caller reads final_video then unlinks it. We need to preserve temp_dir until then.
+            # Actually, the caller reads 'video_path' which is inside 'temp_dir'.
+            # So we CANNOT delete temp_dir here.
+            # We should rely on caller to clean up specific file, and we should clean up the rest?
+            # Or better: move final processing to caller? No, let's just leave temp_dir for now.
+            # The caller (process_job) handles 'video_path.unlink()'. 
+            # But the temp directory itself ('temp_dir') needs potential cleanup.
+            # We will clean up residual raw files here but keep output file.
             
-            if temp_dir.exists():
+            if video_dir.exists():
                 try:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    shutil.rmtree(video_dir, ignore_errors=True)
                 except:
                     pass
-    
-    async def _update_job_status(self, job_id: str, status: str, error: Optional[str] = None):
+
+    async def _update_job_status(
+        self, job_id: str, status: str, error: Optional[str] = None
+    ):
         if not self.redis_client:
             return
-        
+
         job_data = await self.redis_client.get(f"job:{job_id}")
-        
+
         if not job_data:
             return
-        
+
         data = json.loads(job_data)
         data["status"] = status
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         if error:
             data["error"] = error
-        
-        await self.redis_client.setex(
-            f"job:{job_id}",
-            3600,
-            json.dumps(data)
-        )
+
+        await self.redis_client.setex(f"job:{job_id}", 3600, json.dumps(data))
 
 
 async def main():
@@ -177,4 +214,10 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        print(f"Fatal worker error: {e}")
+        exit(1)

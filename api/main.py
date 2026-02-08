@@ -40,9 +40,7 @@ async def startup():
     global redis_client
     try:
         redis_client = await redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            decode_responses=False
+            host=REDIS_HOST, port=REDIS_PORT, decode_responses=False
         )
         await redis_client.ping()
     except Exception as e:
@@ -60,51 +58,43 @@ async def shutdown():
 async def create_demo(request: DemoRequest):
     if not redis_client:
         raise HTTPException(status_code=503, detail="Service unavailable")
-    
+
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    
+
     job_data = {
         "job_id": job_id,
         "url": str(request.url),
         "status": "pending",
         "created_at": now,
-        "updated_at": now
+        "updated_at": now,
     }
-    
-    await redis_client.setex(
-        f"job:{job_id}",
-        JOB_TTL,
-        json.dumps(job_data)
-    )
-    
+
+    await redis_client.setex(f"job:{job_id}", JOB_TTL, json.dumps(job_data))
+
     await redis_client.lpush("demo:queue", job_id)
-    
-    return JobResponse(
-        job_id=job_id,
-        status="pending",
-        created_at=now
-    )
+
+    return JobResponse(job_id=job_id, status="pending", created_at=now)
 
 
 @app.get("/demo/status/{job_id}", response_model=JobStatus)
 async def get_status(job_id: str):
     if not redis_client:
         raise HTTPException(status_code=503, detail="Service unavailable")
-    
+
     job_data = await redis_client.get(f"job:{job_id}")
-    
+
     if not job_data:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     data = json.loads(job_data)
-    
+
     return JobStatus(
         job_id=data["job_id"],
         status=data["status"],
         created_at=data["created_at"],
         updated_at=data["updated_at"],
-        error=data.get("error")
+        error=data.get("error"),
     )
 
 
@@ -112,26 +102,25 @@ async def get_status(job_id: str):
 async def export_video(job_id: str):
     if not redis_client:
         raise HTTPException(status_code=503, detail="Service unavailable")
-    
+
     job_data = await redis_client.get(f"job:{job_id}")
-    
+
     if not job_data:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     data = json.loads(job_data)
-    
+
     if data["status"] != "completed":
         raise HTTPException(
-            status_code=400,
-            detail=f"Job status is {data['status']}, not completed"
+            status_code=400, detail=f"Job status is {data['status']}, not completed"
         )
-    
+
     video_key = f"video:{job_id}"
     video_data = await redis_client.get(video_key)
-    
+
     if not video_data:
         raise HTTPException(status_code=404, detail="Video not found")
-    
+
     async def stream_and_cleanup():
         yield video_data
         try:
@@ -139,13 +128,11 @@ async def export_video(job_id: str):
             await redis_client.delete(f"job:{job_id}")
         except:
             pass
-    
+
     return StreamingResponse(
         stream_and_cleanup(),
         media_type="video/mp4",
-        headers={
-            "Content-Disposition": f"attachment; filename=demo-{job_id}.mp4"
-        }
+        headers={"Content-Disposition": f"attachment; filename=demo-{job_id}.mp4"},
     )
 
 
@@ -153,15 +140,12 @@ async def export_video(job_id: str):
 async def cleanup_job(job_id: str):
     if not redis_client:
         raise HTTPException(status_code=503, detail="Service unavailable")
-    
-    deleted = await redis_client.delete(
-        f"job:{job_id}",
-        f"video:{job_id}"
-    )
-    
+
+    deleted = await redis_client.delete(f"job:{job_id}", f"video:{job_id}")
+
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     return {"status": "deleted", "job_id": job_id}
 
 
