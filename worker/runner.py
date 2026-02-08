@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import tempfile
+import shutil
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -142,12 +143,11 @@ class DemoWorker:
                 except:
                     pass
             
-            try:
-                import shutil
-                if temp_dir.exists():
+            if temp_dir.exists():
+                try:
                     shutil.rmtree(temp_dir, ignore_errors=True)
-            except:
-                pass
+                except:
+                    pass
     
     async def _update_job_status(self, job_id: str, status: str, error: Optional[str] = None):
         if not self.redis_client:

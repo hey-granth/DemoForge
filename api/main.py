@@ -38,11 +38,16 @@ class JobStatus(BaseModel):
 @app.on_event("startup")
 async def startup():
     global redis_client
-    redis_client = await redis.Redis(
-        host=REDIS_HOST,
-        port=REDIS_PORT,
-        decode_responses=False
-    )
+    try:
+        redis_client = await redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            decode_responses=False
+        )
+        await redis_client.ping()
+    except Exception as e:
+        print(f"Failed to connect to Redis: {e}")
+        redis_client = None
 
 
 @app.on_event("shutdown")
@@ -129,8 +134,11 @@ async def export_video(job_id: str):
     
     async def stream_and_cleanup():
         yield video_data
-        await redis_client.delete(video_key)
-        await redis_client.delete(f"job:{job_id}")
+        try:
+            await redis_client.delete(video_key)
+            await redis_client.delete(f"job:{job_id}")
+        except:
+            pass
     
     return StreamingResponse(
         stream_and_cleanup(),
