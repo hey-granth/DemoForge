@@ -67,7 +67,8 @@ class TestExecutionController:
             "https://example.com",
             "https://example.com/page1",
             "https://example.com/page2",
-            "https://example.com/page3"
+            "https://example.com/page3",
+            "https://example.com/page4"
         ])
         
         await executor.execute_demo("https://example.com", mock_browser, mock_discovery, mock_planner)

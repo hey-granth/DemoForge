@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, HttpUrl
 import redis.asyncio as redis
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 app = FastAPI()
 
@@ -62,7 +62,7 @@ async def create_demo(request: DemoRequest):
         raise HTTPException(status_code=503, detail="Service unavailable")
     
     job_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     
     job_data = {
         "job_id": job_id,

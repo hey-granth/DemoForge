@@ -2,9 +2,9 @@ import asyncio
 import hashlib
 from typing import Set, List
 from urllib.parse import urlparse
-from browser import BrowserSession
-from discovery import InteractionDiscovery, InteractionElement
-from planner import InteractionPlanner, ActionPlan
+from .browser import BrowserSession
+from .discovery import InteractionDiscovery, InteractionElement
+from .planner import InteractionPlanner, ActionPlan
 
 
 class ExecutionState:

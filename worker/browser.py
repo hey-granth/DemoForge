@@ -39,7 +39,9 @@ class BrowserSession:
         self.context = await self.browser.new_context(
             viewport={"width": self.viewport_width, "height": self.viewport_height},
             record_video_dir=str(self.video_dir),
-            record_video_size={"width": self.viewport_width, "height": self.viewport_height}
+            record_video_size={"width": self.viewport_width, "height": self.viewport_height},
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            ignore_https_errors=True
         )
         
         self.page = await self.context.new_page()
@@ -51,8 +53,17 @@ class BrowserSession:
     async def navigate(self, url: str, timeout: int = 30000):
         if not self.page:
             raise RuntimeError("Browser page not initialized")
-        await self.page.goto(url, wait_until="networkidle", timeout=timeout)
-        await asyncio.sleep(1)
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                await self.page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                await asyncio.sleep(1)
+                return
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    raise
+                await asyncio.sleep(2)
     
     async def wait_for_idle(self, timeout: int = 5000):
         if not self.page:
@@ -82,7 +93,10 @@ class BrowserSession:
         if not self.page:
             return False
         try:
-            await self.page.click(selector, timeout=timeout)
+            # Scroll element into view before clicking
+            await self.page.locator(selector).first.scroll_into_view_if_needed()
+            await asyncio.sleep(0.3)
+            await self.page.click(selector, timeout=timeout, force=False)
             await self.wait_for_idle()
             return True
         except Exception as e:

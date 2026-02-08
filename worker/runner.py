@@ -5,13 +5,13 @@ import tempfile
 import shutil
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import redis.asyncio as redis
-from browser import BrowserSession
-from discovery import InteractionDiscovery
-from planner import InteractionPlanner
-from executor import ExecutionController
-from recorder import VideoProcessor
+from .browser import BrowserSession
+from .discovery import InteractionDiscovery
+from .planner import InteractionPlanner
+from .executor import ExecutionController
+from .recorder import VideoProcessor
 
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -28,7 +28,7 @@ class DemoWorker:
         self.running = True
     
     async def start(self):
-        self.redis_client = await redis.Redis(
+        self.redis_client = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
             decode_responses=False
@@ -160,8 +160,7 @@ class DemoWorker:
         
         data = json.loads(job_data)
         data["status"] = status
-        data["updated_at"] = datetime.utcnow().isoformat()
-        
+        data["updated_at"] = datetime.now(timezone.utc).isoformat()
         if error:
             data["error"] = error
         

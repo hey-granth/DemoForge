@@ -72,7 +72,7 @@ class TestBrowserSession:
     async def test_scroll_page_with_page(self, temp_video_dir):
         browser = BrowserSession(video_dir=temp_video_dir)
         browser.page = AsyncMock()
-        browser.page.evaluate = AsyncMock(side_effect=[1500, None, None, None])
+        browser.page.evaluate = AsyncMock(side_effect=[1500, None, None, None, None])
         
         await browser.scroll_page()
         

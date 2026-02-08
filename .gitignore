@@ -17,3 +17,4 @@ venv.bak/
 
 .idea/
 __ruff_cache__/
+.pytest_cache/

@@ -19,3 +19,6 @@ dependencies = [
     "ruff>=0.15.0",
     "uvicorn>=0.40.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["api", "worker", "docker"]

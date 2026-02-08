@@ -141,7 +141,7 @@ class TestInteractionDiscovery:
         mock_button.inner_text = AsyncMock(return_value="Submit")
         mock_button.get_attribute = AsyncMock(side_effect=lambda x: "submit-btn" if x == "id" else "button")
         
-        mock_page.query_selector_all = AsyncMock(side_effect=lambda sel: [mock_button] if "button" in sel else [])
+        mock_page.query_selector_all = AsyncMock(side_effect=lambda sel: [mock_button] if sel == "button" else [])
         
         discovery = InteractionDiscovery(mock_page)
         elements = await discovery.scan_elements()
@@ -184,7 +184,7 @@ class TestInteractionDiscovery:
         mock_button2.inner_text = AsyncMock(return_value="Click")
         mock_button2.get_attribute = AsyncMock(side_effect=lambda x: None if x == "id" else "button")
         
-        mock_page.query_selector_all = AsyncMock(side_effect=lambda sel: [mock_button1, mock_button2] if "button" in sel else [])
+        mock_page.query_selector_all = AsyncMock(side_effect=lambda sel: [mock_button1, mock_button2] if sel == "button" else [])
         
         discovery = InteractionDiscovery(mock_page)
         elements = await discovery.scan_elements()
