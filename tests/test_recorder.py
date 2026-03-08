@@ -19,7 +19,7 @@ class TestVideoProcessor:
         processor = VideoProcessor(target_fps=30)
         assert processor.target_fps == 30
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_process_video_success(self, mock_run, temp_videos):
         input_video, output_video = temp_videos
 
@@ -42,7 +42,7 @@ class TestVideoProcessor:
         with pytest.raises(FileNotFoundError):
             processor.process_video(input_video, output_video)
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_process_video_ffmpeg_failure(self, mock_run, temp_videos):
         input_video, output_video = temp_videos
 
@@ -56,7 +56,7 @@ class TestVideoProcessor:
             with patch.object(processor, "_get_video_duration", return_value=10.0):
                 processor.process_video(input_video, output_video)
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_process_video_timeout(self, mock_run, temp_videos):
         input_video, output_video = temp_videos
 
@@ -70,7 +70,7 @@ class TestVideoProcessor:
             with patch.object(processor, "_get_video_duration", return_value=10.0):
                 processor.process_video(input_video, output_video)
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_process_video_trims_idle_time(self, mock_run, temp_videos):
         input_video, output_video = temp_videos
 
@@ -88,7 +88,7 @@ class TestVideoProcessor:
                 assert "-ss" in args
                 assert "-to" in args
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_get_video_duration(self, mock_run):
         mock_run.return_value = MagicMock(stdout=b"45.5", returncode=0)
 
@@ -98,7 +98,7 @@ class TestVideoProcessor:
         assert duration == 45.5
         assert "ffprobe" in mock_run.call_args[0][0]
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_get_video_duration_failure(self, mock_run):
         from subprocess import CalledProcessError
 
@@ -125,7 +125,7 @@ class TestVideoProcessor:
         processor = VideoProcessor()
         processor.cleanup(tmp_path / "nonexistent.mp4")
 
-    @patch("worker.recorder.subprocess.run")
+    @patch("demoforge.core.recorder.subprocess.run")
     def test_skips_trim_for_short_videos(self, mock_run, temp_videos):
         input_video, output_video = temp_videos
 

@@ -28,13 +28,14 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY worker/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml /app/pyproject.toml
+COPY demoforge/ /app/demoforge/
+COPY worker/ /app/worker/
+
+RUN pip install --no-cache-dir ".[worker]"
 
 RUN playwright install chromium
 RUN playwright install-deps chromium
-
-COPY worker /app/worker
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app

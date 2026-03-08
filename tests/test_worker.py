@@ -83,7 +83,7 @@ class TestDemoWorker:
         mock_redis.get.return_value = json.dumps(sample_job_data).encode()
 
         with patch.object(
-            worker, "_run_demo", AsyncMock(side_effect=Exception("Execution failed"))
+            worker, "_run_demo", AsyncMock(side_effect=RuntimeError("Execution failed"))
         ):
             await worker.process_job("test-job-123")
 
@@ -91,73 +91,46 @@ class TestDemoWorker:
         assert any("failed" in str(call) for call in calls)
 
     @pytest.mark.asyncio
-    async def test_run_demo_initializes_components(self, tmp_path):
+    async def test_run_demo_calls_pipeline(self, tmp_path):
         worker = DemoWorker()
 
-        with patch("worker.runner.BrowserSession") as mock_browser_class:
-            mock_browser = AsyncMock()
-            mock_browser.start = AsyncMock()
-            mock_browser.stop = AsyncMock()
-            mock_browser.page = MagicMock()
-            mock_browser.get_video_path = AsyncMock(
-                return_value=tmp_path / "video.webm"
-            )
-            mock_browser_class.return_value = mock_browser
+        output_file = tmp_path / "test-job.mp4"
+        output_file.write_bytes(b"processed_video")
 
-            (tmp_path / "video.webm").write_bytes(b"fake_video")
+        with patch(
+            "worker.runner.run_demo_pipeline",
+            new_callable=AsyncMock,
+            return_value=output_file,
+        ) as mock_pipeline:
+            result = await worker._run_demo("https://example.com", "test-job")
 
-            with patch("worker.runner.ExecutionController") as mock_executor_class:
-                mock_executor = AsyncMock()
-                mock_executor.execute_demo = AsyncMock()
-                mock_executor_class.return_value = mock_executor
-
-                with patch("worker.runner.VideoProcessor") as mock_processor_class:
-                    mock_processor = MagicMock()
-                    mock_processor.process_video = MagicMock(
-                        return_value=tmp_path / "output.mp4"
-                    )
-                    mock_processor_class.return_value = mock_processor
-
-                    (tmp_path / "output.mp4").write_bytes(b"processed_video")
-
-                    await worker._run_demo("https://example.com", "test-job")
-
-                    assert mock_browser.start.called
-                    assert mock_executor.execute_demo.called
+            assert mock_pipeline.called
+            call_kwargs = mock_pipeline.call_args
+            assert call_kwargs[0][0] == "https://example.com"
+            assert result == output_file
 
     @pytest.mark.asyncio
-    async def test_run_demo_cleans_up_on_failure(self, tmp_path):
+    async def test_run_demo_propagates_pipeline_failure(self, tmp_path):
         worker = DemoWorker()
 
-        with patch("worker.runner.BrowserSession") as mock_browser_class:
-            mock_browser = AsyncMock()
-            mock_browser.start = AsyncMock()
-            mock_browser.stop = AsyncMock()
-            mock_browser.page = MagicMock()
-            mock_browser_class.return_value = mock_browser
+        with patch(
+            "worker.runner.run_demo_pipeline",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Test error"),
+        ):
+            with pytest.raises(RuntimeError, match="Test error"):
+                await worker._run_demo("https://example.com", "test-job")
 
-            with patch("worker.runner.ExecutionController") as mock_executor_class:
-                mock_executor = AsyncMock()
-                mock_executor.execute_demo = AsyncMock(
-                    side_effect=Exception("Test error")
-                )
-                mock_executor_class.return_value = mock_executor
-
-                with pytest.raises(Exception):
-                    await worker._run_demo("https://example.com", "test-job")
-
-                assert mock_browser.stop.called
 
     @pytest.mark.asyncio
     async def test_run_demo_validates_page_initialization(self, tmp_path):
         worker = DemoWorker()
 
-        with patch("worker.runner.BrowserSession") as mock_browser_class:
-            mock_browser = AsyncMock()
-            mock_browser.start = AsyncMock()
-            mock_browser.page = None
-            mock_browser_class.return_value = mock_browser
-
+        with patch(
+            "worker.runner.run_demo_pipeline",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Browser page failed to initialize"),
+        ):
             with pytest.raises(RuntimeError, match="page failed to initialize"):
                 await worker._run_demo("https://example.com", "test-job")
 
@@ -184,38 +157,17 @@ class TestDemoWorker:
         assert job_data["error"] == "Test error"
 
     @pytest.mark.asyncio
-    async def test_run_demo_cleanup_temp_directory(self, tmp_path):
+    async def test_run_demo_returns_pipeline_output(self, tmp_path):
         worker = DemoWorker()
 
-        with patch("worker.runner.tempfile.mkdtemp", return_value=str(tmp_path)):
-            with patch("worker.runner.BrowserSession") as mock_browser_class:
-                mock_browser = AsyncMock()
-                mock_browser.start = AsyncMock()
-                mock_browser.stop = AsyncMock()
-                mock_browser.page = MagicMock()
-                mock_browser.get_video_path = AsyncMock(
-                    return_value=tmp_path / "video.webm"
-                )
-                mock_browser_class.return_value = mock_browser
+        output_file = tmp_path / "test-job.mp4"
+        output_file.write_bytes(b"processed")
 
-                (tmp_path / "video.webm").write_bytes(b"fake")
-
-                with patch("worker.runner.ExecutionController") as mock_executor_class:
-                    mock_executor = AsyncMock()
-                    mock_executor.execute_demo = AsyncMock()
-                    mock_executor_class.return_value = mock_executor
-
-                    with patch("worker.runner.VideoProcessor") as mock_processor_class:
-                        mock_processor = MagicMock()
-                        output_path = tmp_path / "output.mp4"
-                        mock_processor.process_video = MagicMock(
-                            return_value=output_path
-                        )
-                        mock_processor_class.return_value = mock_processor
-
-                        output_path.write_bytes(b"processed")
-
-                        with patch("worker.runner.shutil.rmtree") as mock_rmtree:
-                            await worker._run_demo("https://example.com", "test-job")
-
-                            assert mock_rmtree.called
+        with patch(
+            "worker.runner.run_demo_pipeline",
+            new_callable=AsyncMock,
+            return_value=output_file,
+        ):
+            result = await worker._run_demo("https://example.com", "test-job")
+            assert result == output_file
+            assert result.exists()

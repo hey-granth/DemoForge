@@ -1,18 +1,11 @@
 import os
 import json
 import asyncio
-import tempfile
-import shutil
 from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
 import redis.asyncio as redis
-from playwright.async_api import Error as PlaywrightError
-from .browser import BrowserSession
-from .discovery import InteractionDiscovery
-from .planner import InteractionPlanner
-from .executor import ExecutionController
-from .recorder import VideoProcessor
+from demoforge.core.pipeline import run_demo_pipeline
 
 
 # Redis config with socket timeout
@@ -119,63 +112,19 @@ class DemoWorker:
             await self._update_job_status(job_id, "failed", error=str(e))
 
     async def _run_demo(self, url: str, job_id: str) -> Path:
-        # 1. Create unique temp directory
-        temp_dir = Path(tempfile.mkdtemp())
-        video_dir = temp_dir / "raw"
-        video_dir.mkdir(exist_ok=True)
+        import tempfile
 
-        browser = None
+        temp_dir = Path(tempfile.mkdtemp(prefix="demoforge_worker_"))
+        output_path = temp_dir / f"{job_id}.mp4"
 
-        try:
-            # 2. Start recording
-            browser = BrowserSession(video_dir=video_dir)
-            await browser.start()
-
-            if not browser.page:
-                raise RuntimeError("Browser page failed to initialize")
-
-            # 3. Execute interaction
-            discovery = InteractionDiscovery(browser.page)
-            planner = InteractionPlanner()
-            executor = ExecutionController(
-                max_clicks=MAX_CLICKS, max_depth=MAX_DEPTH, max_runtime=MAX_RUNTIME
-            )
-
-            await executor.execute_demo(url, browser, discovery, planner)
-
-            # 4. Close browser context explicitly to flush video
-            await browser.stop()
-            browser = None  # Prevent double close in finally
-
-            # 5. Discover recorded file
-            processor = VideoProcessor()
-            raw_video = processor.discover_video_file(video_dir)
-
-            # 6. Convert to MP4
-            output_path = temp_dir / f"{job_id}.mp4"
-            final_video = processor.process_video(raw_video, output_path)
-
-            # 7. Validate output
-            if not final_video.exists():
-                raise RuntimeError("Final MP4 file missing")
-
-            if final_video.stat().st_size == 0:
-                raise RuntimeError("Generated video is empty")
-
-            return final_video
-
-        finally:
-            if browser:
-                try:
-                    await browser.stop()
-                except PlaywrightError:
-                    pass
-
-            if video_dir.exists():
-                try:
-                    shutil.rmtree(video_dir, ignore_errors=True)
-                except OSError:
-                    pass
+        return await run_demo_pipeline(
+            url,
+            output_path,
+            max_clicks=MAX_CLICKS,
+            max_depth=MAX_DEPTH,
+            max_runtime=MAX_RUNTIME,
+            gemini_api_key=os.getenv("GEMINI_API_KEY"),
+        )
 
     async def _update_job_status(
         self, job_id: str, status: str, error: Optional[str] = None

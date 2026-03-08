@@ -25,7 +25,7 @@ class TestBrowserSession:
     async def test_start_creates_browser(self, temp_video_dir):
         browser = BrowserSession(video_dir=temp_video_dir)
 
-        with patch("worker.browser.async_playwright") as mock_pw:
+        with patch("demoforge.core.browser.async_playwright") as mock_pw:
             mock_playwright = AsyncMock()
             mock_pw.return_value.start = AsyncMock(return_value=mock_playwright)
 

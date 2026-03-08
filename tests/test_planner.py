@@ -130,7 +130,7 @@ class TestInteractionPlanner:
         assert len(result) == 0
 
     @pytest.mark.asyncio
-    @patch("worker.planner.genai")
+    @patch("demoforge.core.planner.genai")
     async def test_gemini_api_failure_fallback(self, mock_genai):
         mock_model = MagicMock()
         mock_model.generate_content_async = AsyncMock(
@@ -147,7 +147,7 @@ class TestInteractionPlanner:
         assert len(result) > 0
 
     @pytest.mark.asyncio
-    @patch("worker.planner.genai")
+    @patch("demoforge.core.planner.genai")
     async def test_gemini_response_parsing(self, mock_genai):
         mock_response = MagicMock()
         mock_response.text = (
@@ -168,7 +168,7 @@ class TestInteractionPlanner:
         assert result[0].selector == "btn1"
 
     @pytest.mark.asyncio
-    @patch("worker.planner.genai")
+    @patch("demoforge.core.planner.genai")
     async def test_gemini_handles_markdown_wrapped_json(self, mock_genai):
         mock_response = MagicMock()
         mock_response.text = '```json\n[{"selector":"btn1","action":"click","priority":1,"reason":"test"}]\n```'
