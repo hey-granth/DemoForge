@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from worker.planner import InteractionPlanner, ActionPlan, BLACKLIST_KEYWORDS
+from worker.planner import InteractionPlanner, ActionPlan
 
 
 class TestBlacklistEnforcement:

@@ -29,7 +29,7 @@ class TestVideoProcessor:
             processor = VideoProcessor()
 
             with patch.object(processor, "_get_video_duration", return_value=10.0):
-                result = processor.process_video(input_video, output_video)
+                processor.process_video(input_video, output_video)
 
                 assert mock_run.called
                 assert "ffmpeg" in mock_run.call_args[0][0]

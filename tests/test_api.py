@@ -1,11 +1,11 @@
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 import json
 from datetime import datetime
 
-from api.main import app, redis_client
+from api.main import app
 
 
 @pytest_asyncio.fixture

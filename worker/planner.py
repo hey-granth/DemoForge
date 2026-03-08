@@ -4,7 +4,7 @@ from typing import List, Dict, Optional
 import google.generativeai as genai
 
 
-BLACKLIST_KEYWORDS = [
+BLACKLIST_KEYWORDS: list[str] = [
     "delete",
     "remove",
     "unsubscribe",
@@ -57,11 +57,11 @@ class InteractionPlanner:
         try:
             ranked = await self._llm_ranking(filtered, current_url, max_actions)
             return ranked
-        except Exception as e:
+        except Exception:
             return self._fallback_ranking(filtered, max_actions)
 
     def _apply_blacklist(self, elements: List[Dict]) -> List[Dict]:
-        filtered = []
+        filtered: list = []
 
         for elem in elements:
             text = elem.get("text", "").lower()
@@ -142,7 +142,7 @@ Return only JSON array:
             "docs",
         ]
 
-        scored = []
+        scored: list = []
         for elem in elements:
             text = elem.get("text", "").lower()
             score = 0
@@ -161,7 +161,7 @@ Return only JSON array:
 
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        plans = []
+        plans: list = []
         for idx, (score, elem) in enumerate(scored[:max_actions]):
             plan = ActionPlan(
                 selector=elem["selector"],

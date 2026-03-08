@@ -1,8 +1,14 @@
-import os
 import asyncio
 from pathlib import Path
 from typing import Optional
-from playwright.async_api import async_playwright, Browser, BrowserContext, Page
+from playwright.async_api import (
+    async_playwright,
+    Browser,
+    BrowserContext,
+    Page,
+    Error as PlaywrightError,
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 
 class BrowserSession:
@@ -63,7 +69,7 @@ class BrowserSession:
                 )
                 await asyncio.sleep(1)
                 return
-            except Exception as e:
+            except (PlaywrightError, PlaywrightTimeoutError):
                 if attempt == max_retries - 1:
                     raise
                 await asyncio.sleep(2)
@@ -73,7 +79,7 @@ class BrowserSession:
             return
         try:
             await self.page.wait_for_load_state("networkidle", timeout=timeout)
-        except:
+        except PlaywrightTimeoutError:
             pass
 
     async def scroll_page(self):
@@ -102,7 +108,7 @@ class BrowserSession:
             await self.page.click(selector, timeout=timeout, force=False)
             await self.wait_for_idle()
             return True
-        except Exception as e:
+        except (PlaywrightError, PlaywrightTimeoutError):
             return False
 
     async def get_current_url(self) -> str:
@@ -120,17 +126,17 @@ class BrowserSession:
         try:
             if self.context:
                 await self.context.close()
-        except:
+        except PlaywrightError:
             pass
-        
+
         try:
             if self.browser:
                 await self.browser.close()
-        except:
+        except PlaywrightError:
             pass
-        
+
         try:
             if self.playwright:
                 await self.playwright.stop()
-        except:
+        except PlaywrightError:
             pass

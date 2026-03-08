@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from worker.executor import ExecutionController, ExecutionState
 from worker.discovery import InteractionElement
 from worker.planner import ActionPlan

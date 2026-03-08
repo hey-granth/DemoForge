@@ -18,6 +18,11 @@ dependencies = [
     "redis>=7.1.0",
     "ruff>=0.15.0",
     "uvicorn>=0.40.0",
+    "google-ai-generativelanguage>=0.6.15",
+    "grpcio-status>=1.71.2",
+    "openai>=2.24.0",
+    "protobuf>=5.29.6",
+    "pydantic-core>=2.41.5",
 ]
 
 [tool.setuptools.packages.find]

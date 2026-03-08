@@ -1,7 +1,7 @@
 import os
 import uuid
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, HttpUrl
 import redis.asyncio as redis
@@ -43,7 +43,7 @@ async def startup():
             host=REDIS_HOST, port=REDIS_PORT, decode_responses=False
         )
         await redis_client.ping()
-    except Exception as e:
+    except (redis.RedisError, OSError) as e:
         print(f"Failed to connect to Redis: {e}")
         redis_client = None
 
@@ -126,7 +126,7 @@ async def export_video(job_id: str):
         try:
             await redis_client.delete(video_key)
             await redis_client.delete(f"job:{job_id}")
-        except:
+        except redis.RedisError:
             pass
 
     return StreamingResponse(
@@ -156,5 +156,5 @@ async def health():
     try:
         await redis_client.ping()
         return {"status": "healthy"}
-    except Exception as e:
+    except redis.RedisError as e:
         raise HTTPException(status_code=503, detail=str(e))

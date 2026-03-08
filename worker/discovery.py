@@ -1,6 +1,6 @@
 import hashlib
-from typing import List, Dict, Set
-from playwright.async_api import Page, ElementHandle
+from typing import List, Set
+from playwright.async_api import Page, Error as PlaywrightError
 
 
 class InteractionElement:
@@ -44,7 +44,6 @@ class InteractionDiscovery:
         self.visited_fingerprints: Set[str] = set()
 
     async def scan_elements(self) -> List[InteractionElement]:
-        elements = []
 
         button_elements = await self._scan_buttons()
         link_elements = await self._scan_links()
@@ -97,7 +96,7 @@ class InteractionDiscovery:
                 )
 
                 elements.append(elem)
-            except:
+            except PlaywrightError:
                 continue
 
         return elements
@@ -141,7 +140,7 @@ class InteractionDiscovery:
                 )
 
                 elements.append(elem)
-            except:
+            except PlaywrightError:
                 continue
 
         return elements
@@ -179,7 +178,7 @@ class InteractionDiscovery:
                 )
 
                 elements.append(elem)
-            except:
+            except PlaywrightError:
                 continue
 
         return elements

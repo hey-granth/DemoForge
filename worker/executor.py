@@ -4,7 +4,7 @@ from typing import Set, List
 from urllib.parse import urlparse
 from .browser import BrowserSession
 from .discovery import InteractionDiscovery, InteractionElement
-from .planner import InteractionPlanner, ActionPlan
+from .planner import InteractionPlanner
 
 
 class ExecutionState:
@@ -132,10 +132,10 @@ class ExecutionController:
 
             self.state = ExecutionState.COMPLETE
 
-        except SafetyViolation as e:
+        except SafetyViolation:
             self.state = ExecutionState.FAILED
             raise
-        except Exception as e:
+        except Exception:
             self.state = ExecutionState.FAILED
             raise
 

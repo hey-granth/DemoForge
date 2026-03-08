@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
@@ -121,7 +120,7 @@ class TestDemoWorker:
 
                     (tmp_path / "output.mp4").write_bytes(b"processed_video")
 
-                    result = await worker._run_demo("https://example.com", "test-job")
+                    await worker._run_demo("https://example.com", "test-job")
 
                     assert mock_browser.start.called
                     assert mock_executor.execute_demo.called
@@ -217,8 +216,6 @@ class TestDemoWorker:
                         output_path.write_bytes(b"processed")
 
                         with patch("worker.runner.shutil.rmtree") as mock_rmtree:
-                            result = await worker._run_demo(
-                                "https://example.com", "test-job"
-                            )
+                            await worker._run_demo("https://example.com", "test-job")
 
                             assert mock_rmtree.called

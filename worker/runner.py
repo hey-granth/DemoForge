@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime, timezone
 import redis.asyncio as redis
+from playwright.async_api import Error as PlaywrightError
 from .browser import BrowserSession
 from .discovery import InteractionDiscovery
 from .planner import InteractionPlanner
@@ -33,21 +34,21 @@ class DemoWorker:
 
     async def start(self):
         self.redis_client = redis.Redis(
-            host=REDIS_HOST, 
-            port=REDIS_PORT, 
+            host=REDIS_HOST,
+            port=REDIS_PORT,
             decode_responses=False,
             socket_timeout=REDIS_SOCKET_TIMEOUT,
             socket_connect_timeout=REDIS_SOCKET_CONNECT_TIMEOUT,
             retry_on_timeout=True,
-            health_check_interval=30
+            health_check_interval=30,
         )
 
         try:
             await self.redis_client.ping()
             print(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
-        except Exception as e:
+        except (redis.RedisError, OSError) as e:
             print(f"Failed to connect to Redis: {e}")
-            raise e
+            raise
 
         print(f"Worker started. Polling queue every {POLL_INTERVAL}s", flush=True)
 
@@ -71,7 +72,7 @@ class DemoWorker:
 
             except KeyboardInterrupt:
                 self.running = False
-            except Exception as e:
+            except (redis.RedisError, OSError, ValueError) as e:
                 print(f"Worker error: {e}")
                 await asyncio.sleep(POLL_INTERVAL)
 
@@ -79,7 +80,7 @@ class DemoWorker:
 
     async def process_job(self, job_id: str):
         if not self.redis_client:
-            print(f"Redis client not available")
+            print("Redis client not available")
             return
 
         print(f"Processing job: {job_id}", flush=True)
@@ -107,7 +108,13 @@ class DemoWorker:
             await self._update_job_status(job_id, "completed")
             print(f"Job {job_id} completed")
 
-        except Exception as e:
+        except (
+            redis.RedisError,
+            json.JSONDecodeError,
+            KeyError,
+            OSError,
+            RuntimeError,
+        ) as e:
             print(f"Job {job_id} failed: {e}")
             await self._update_job_status(job_id, "failed", error=str(e))
 
@@ -116,76 +123,58 @@ class DemoWorker:
         temp_dir = Path(tempfile.mkdtemp())
         video_dir = temp_dir / "raw"
         video_dir.mkdir(exist_ok=True)
-        
+
         browser = None
-        
+
         try:
             # 2. Start recording
             browser = BrowserSession(video_dir=video_dir)
             await browser.start()
-            
+
             if not browser.page:
                 raise RuntimeError("Browser page failed to initialize")
-            
+
             # 3. Execute interaction
             discovery = InteractionDiscovery(browser.page)
             planner = InteractionPlanner()
             executor = ExecutionController(
-                max_clicks=MAX_CLICKS,
-                max_depth=MAX_DEPTH,
-                max_runtime=MAX_RUNTIME
+                max_clicks=MAX_CLICKS, max_depth=MAX_DEPTH, max_runtime=MAX_RUNTIME
             )
-            
+
             await executor.execute_demo(url, browser, discovery, planner)
-            
+
             # 4. Close browser context explicitly to flush video
             await browser.stop()
             browser = None  # Prevent double close in finally
-            
+
             # 5. Discover recorded file
             processor = VideoProcessor()
             raw_video = processor.discover_video_file(video_dir)
-            
+
             # 6. Convert to MP4
             output_path = temp_dir / f"{job_id}.mp4"
             final_video = processor.process_video(raw_video, output_path)
-            
+
             # 7. Validate output
             if not final_video.exists():
                 raise RuntimeError("Final MP4 file missing")
-            
+
             if final_video.stat().st_size == 0:
                 raise RuntimeError("Generated video is empty")
-            
-            return final_video
 
-        except Exception as e:
-            # If we fail during run_demo, we might need to cleanup temp_dir here
-            # But the finally block handles it.
-            # We just re-raise to let process_job handle the error reporting
-            raise e
+            return final_video
 
         finally:
             if browser:
                 try:
                     await browser.stop()
-                except:
+                except PlaywrightError:
                     pass
-            
-            # 8. Cleanup (only remove temp dir, as final video is in it but read by caller)
-            # The caller reads final_video then unlinks it. We need to preserve temp_dir until then.
-            # Actually, the caller reads 'video_path' which is inside 'temp_dir'.
-            # So we CANNOT delete temp_dir here.
-            # We should rely on caller to clean up specific file, and we should clean up the rest?
-            # Or better: move final processing to caller? No, let's just leave temp_dir for now.
-            # The caller (process_job) handles 'video_path.unlink()'. 
-            # But the temp directory itself ('temp_dir') needs potential cleanup.
-            # We will clean up residual raw files here but keep output file.
-            
+
             if video_dir.exists():
                 try:
                     shutil.rmtree(video_dir, ignore_errors=True)
-                except:
+                except OSError:
                     pass
 
     async def _update_job_status(
@@ -218,6 +207,6 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
-    except Exception as e:
+    except (OSError, RuntimeError, redis.RedisError) as e:
         print(f"Fatal worker error: {e}")
         exit(1)
